@@ -1,0 +1,45 @@
+---
+title: "Most Harmful Weather Events"
+output: html_document
+---
+
+## Synopsis
+
+## Data Processing
+
+Read the raw data
+``` {r cache=TRUE}
+rawDataFile <- "stormData.zip"
+if (!file.exists(rawDataFile)) {
+    download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", rawDataFile);
+}
+rawData <- read.csv(rawDataFile);
+```
+
+Build a new data set that includes only the events that caused fatalities, injuries, or damage
+``` {r}
+
+harm <- rawData[rawData$FATALITIES > 0 | 
+                    rawData$INJURIES > 0 | 
+                    rawData$PROPDMG > 0, 
+                c("EVTYPE", "BGN_DATE", "FATALITIES", "INJURIES", "PROPDMG")]
+harm$BGN_DATE <- as.Date(harm$BGN_DATE, format = "%m/%d/%Y")
+```
+
+Define the event types that caused most fatalities 
+``` {r}
+fatalities <- aggregate(harm$FATALITIES, list(event = harm$EVTYPE), sum)
+fatalities[order(-fatalities$x),][1:10,]
+```
+
+
+``` {r}
+injuries <- aggregate(harm$INJURIES, list(event = harm$EVTYPE), sum)
+injuries[order(-injuries$x),][1:10,]
+```
+
+``` {r}
+damage <- aggregate(harm$PROPDMG, list(event = harm$EVTYPE), sum)
+damage[order(-damage$x),][1:10,]
+```
+## Results
