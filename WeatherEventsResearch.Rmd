@@ -1,9 +1,15 @@
 ---
-title: "Most Harmful Weather Events"
+title: "Which extreme weather events are most harmful"
 output: html_document
 ---
 
 ## Synopsis
+Extreme weather events may be very harmful both for the public health and economics.
+Tornadoes are consistently one of the most harmful events, every year hundreds of people across US are killed and thousands injured.
+Until 1992 only tornados were recorded. 
+After 1992 other extreme weather events were reported, and turned out to be even more dangerous.
+Excessive heat caused several times more fatalities that tornados, floods cause more injuries,
+and storm winds cause more property damage
 
 ## Data Processing
 
@@ -11,7 +17,7 @@ Read the raw data
 ``` {r cache=TRUE}
 rawDataFile <- "stormData.zip"
 if (!file.exists(rawDataFile)) {
-    download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", rawDataFile);
+    download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", rawDataFile);
 }
 rawData <- read.csv(rawDataFile);
 ```
@@ -24,22 +30,103 @@ harm <- rawData[rawData$FATALITIES > 0 |
                     rawData$PROPDMG > 0, 
                 c("EVTYPE", "BGN_DATE", "FATALITIES", "INJURIES", "PROPDMG")]
 harm$BGN_DATE <- as.Date(harm$BGN_DATE, format = "%m/%d/%Y")
+harm$YEAR <- as.numeric(format(harm$BGN_DATE, "%Y"))
 ```
 
-Define the event types that caused most fatalities 
+Pick the most significant event types according to the following logic:  
+* calculate sum of particular type of damage (fatalities, injuries, property damage)
+for each event type across all the years.  
+* for each event type calculate its percentage in the total damage
+* choose the event types with the highest percentage  
+* only TORNADO events were reported until 1992, but this only affects the percentage of
+TORNADO, it is one of the most significant factors even after 1992.
+
+The following function implements the calculation of *num* most significant event types
+for the given *field* across all the years
 ``` {r}
-fatalities <- aggregate(harm$FATALITIES, list(event = harm$EVTYPE), sum)
-fatalities[order(-fatalities$x),][1:10,]
+topEventTypes <- function(field, num) {
+  rows <- harm[, field] > 0
+  res <- aggregate(list(COUNT = harm[rows, field]), list(EVTYPE = harm[rows, "EVTYPE"]), sum)
+  total <- sum(harm[rows, field])
+  res$PERCENT <- round(res$COUNT/total * 100)  
+  res[order(-res$COUNT),][1:num,]
+}
 ```
 
+Most harmful events for FATALITIES
+``` {r}
+fatalityEvents <- topEventTypes("FATALITIES", 10)
+fatalityEvents[,c("EVTYPE", "PERCENT")]
+```
+
+Most harmful events for INJURIES
+``` {r}
+injuryEvents <- topEventTypes("INJURIES", 10)
+injuryEvents[,c("EVTYPE", "PERCENT")]
+```
+
+Most harmful events for PROPDMG
+``` {r}
+propEvents <- topEventTypes("PROPDMG", 10)
+propEvents[,c("EVTYPE", "PERCENT")]
+```
+
+Concatenate the top 5 event types from all damage types, 
+and assign a color to each event type so that they could be plotted consistently
+``` {r}
+eventTypes <- unique(c(fatalityEvents$EVTYPE[1:5], injuryEvents$EVTYPE[1:5], propEvents$EVTYPE[1:5]))
+eventTypes <- factor(eventTypes, levels=1:nlevels(harm$EVTYPE), labels=levels(harm$EVTYPE))
+eventColors <- data.frame(EVTYPE = eventTypes, COL = c("red", "blue", "green", "orange", "yellow", "brown", "cyan", "magenta"))
+eventColors$COL <- as.character(eventColors$COL)
+eventColors
+```
+
+Now let's produce a plot for each damage type.
+``` {r}
+plotDamage <- function(field, evTypes, title) {
+    colors <- c()
+    for (t in evTypes) {
+        colors <- c(colors, eventColors[eventColors$EVTYPE == t, "COL"])
+    }
+
+    events <- aggregate(list(COUNT = harm[,field]), list(YEAR = harm$YEAR, EVTYPE = harm$EVTYPE), sum)
+
+    plot(events$YEAR, events$COUNT, type = "n", main = title, xlab = "Year", ylab = field)
+    legend("topleft", legend = evTypes, lty = c(1,1), col = colors)
+
+    for (type in evTypes) {
+        color <- eventColors[eventColors$EVTYPE == type, "COL"]
+        lines(events[events$EVTYPE == type, "YEAR"], events[events$EVTYPE == type, "COUNT"], col=color)
+    }
+}
+```
 
 ``` {r}
-injuries <- aggregate(harm$INJURIES, list(event = harm$EVTYPE), sum)
-injuries[order(-injuries$x),][1:10,]
+plotDamage("FATALITIES", fatalityEvents$EVTYPE[1:5], "Fatalities by event types")
 ```
 
 ``` {r}
-damage <- aggregate(harm$PROPDMG, list(event = harm$EVTYPE), sum)
-damage[order(-damage$x),][1:10,]
+plotDamage("INJURIES", injuryEvents$EVTYPE[1:5], "Injuries by event types")
 ```
+
+``` {r}
+plotDamage("PROPDMG", propEvents$EVTYPE[1:5], "Property damages by event types")
+```
+
 ## Results
+
+Until 1995 tornadoes caused most damages, both to the public health and economics.
+From 1995 heat and flood caused much more damages than tornadoes. 
+
+### Fatalities
+TORNADO was the main and almost only reason for the fatalities until 1995.
+However in the period from 1995 to 2010 HEAT and EXCESSIVE HEAT have caused much more fatalities than.
+In 2011 TORNADO again becomes the most fatal event
+
+### Injuries
+TORNADO consistently causes the most injuries from the beginning of recording.
+Only in period from 1995 to 2007 FLOOD causes the most injuries, and EXCESSIVE HEAT becomes as dangerous as TORNADO
+
+### Property damage
+TORNADO caused all the damages in the period from 1950 to 1995.
+From 1995 to 2010 HEAT and EXCESSIVE HEAT cause much more damages, and FLASH FLOOD caused as much damage as TORNADO
